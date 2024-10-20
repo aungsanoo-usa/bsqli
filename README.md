@@ -64,4 +64,4 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 ## Example
 
 ```bash
-python scan.py -u urls.txt -p payloads.txt -t 10
+python scan.py -u urls.txt -p xor.txt -t 10
