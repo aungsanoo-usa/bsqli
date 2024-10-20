@@ -24,7 +24,7 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 
     ```bash
     git clone https://github.com/aungsanoo-usa/bsqli.git
-    cd yourrepositoryname
+    cd bsqli
     ```
 
 2. Create and activate a virtual environment (optional but recommended):
