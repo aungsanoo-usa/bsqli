@@ -1,0 +1,4 @@
+selenium
+colorama
+webdriver-manager
+urllib3
