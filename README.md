@@ -48,7 +48,7 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 3. Run the scanner:
 
     ```bash
-    python your_script_name.py -u path_to_url_file.txt -p path_to_payload_file.txt -t 5
+    python scan.py -u path_to_url_file.txt -p path_to_payload_file.txt -t 5
     ```
 
     - `-u` or `--url-file` : Path to the file containing URLs to scan.
@@ -58,7 +58,7 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 4. (Optional) If a cookie needs to be included in the request:
 
     ```bash
-    python your_script_name.py -u path_to_url_file.txt -p path_to_payload_file.txt -c "session_id=abcdef123456"
+    python scan.py -u path_to_url_file.txt -p path_to_payload_file.txt -c "session_id=abcdef123456"
     ```
 
 ## Example
