@@ -91,20 +91,20 @@ def perform_request_selenium(driver, url, payload, cookie):
         confirmed_vulnerable = False
 
         total_trials = 3  # Number of trials to run
-        delay_threshold = 5  # Time delay in seconds for SQLi confirmation
+        delay_threshold = 5  # Time delay in seconds
         consistent_delay_count = 0
 
         for attempt in range(total_trials):  # Run multiple trials for confirmation
+            # Adding a random delay between 1 and 3 seconds between each request
+            time.sleep(random.uniform(1, 3))
+
             start_time = time.time()
             driver.get(time_based_payload)
             end_time = time.time()
             response_time = end_time - start_time
 
-            # Check for HTTP status code to detect server-side errors
-            status_code = driver.execute_script("return document.readyState")
-            if status_code == "complete" and "Internal Server Error" not in driver.page_source:
-                if response_time >= delay_threshold:
-                    consistent_delay_count += 1
+            if response_time >= delay_threshold:
+                consistent_delay_count += 1
 
         if consistent_delay_count >= 2:  # Require at least 2 consistent delays to confirm vulnerability
             confirmed_vulnerable = True
@@ -121,8 +121,14 @@ def perform_request_selenium(driver, url, payload, cookie):
         return target_url, False
 
     except WebDriverException as e:
-        print(Fore.RED + f"[!] WebDriverException: {str(e)}")
-        return target_url, False
+        if "ERR_CONNECTION_RESET" in str(e):
+            print(Fore.YELLOW + f"[!] Connection reset for {target_url}, skipping...")
+            return target_url, False
+        else:
+            print(Fore.RED + f"[!] WebDriverException: {str(e)}")
+            return target_url, False
+
+
 
 
 def detect_sql_error_in_response(page_content):
