@@ -87,11 +87,11 @@ def perform_request_selenium(driver, url, payload, cookie):
             driver.add_cookie({"name": "cookie", "value": cookie, "path": "/"})
 
         # Time-based SQLi detection with multiple trials
-        time_based_payload = f"{url}{quote(payload + ' AND SLEEP(5)', safe='')}"
+        time_based_payload = f"{url}{quote(payload + ' AND SLEEP(10)', safe='')}"  # Using 10-second sleep
         confirmed_vulnerable = False
 
         total_trials = 3  # Number of trials to run
-        delay_threshold = 5  # Time delay in seconds
+        delay_threshold = 10  # Time delay threshold in seconds (matches the sleep duration)
         consistent_delay_count = 0
 
         for attempt in range(total_trials):  # Run multiple trials for confirmation
@@ -127,9 +127,6 @@ def perform_request_selenium(driver, url, payload, cookie):
         else:
             print(Fore.RED + f"[!] WebDriverException: {str(e)}")
             return target_url, False
-
-
-
 
 def detect_sql_error_in_response(page_content):
     """
