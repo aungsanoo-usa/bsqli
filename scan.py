@@ -170,9 +170,10 @@ def detect_sql_error_in_response(page_content):
     return False
 
 def save_results(vulnerable_urls, total_found, total_scanned, start_time):
-    """Save the scan results to an HTML report in an output folder."""
-    filename = f"output/sqli_report_{int(time.time())}.html"
-    os.makedirs("output", exist_ok=True)
+    """Save the scan results to an HTML report in the specified output folder."""
+    output_dir = os.path.expanduser("~/aungrecon/output/bsqli_results")  # Define main output directory
+    filename = os.path.join(output_dir, "bsqli_report.html")  # Full path for bsqli_report.html
+    os.makedirs(output_dir, exist_ok=True)
 
     html_content = generate_html_report("Blind SQL Injection", total_found, total_scanned, int(time.time() - start_time), vulnerable_urls)
     with open(filename, 'w') as f:
