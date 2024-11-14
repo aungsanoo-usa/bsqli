@@ -69,8 +69,8 @@ def setup_selenium_driver(proxy=None):
     chrome_options.add_argument("--log-level=3")
 
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-    driver.set_page_load_timeout(40)
-    driver.set_script_timeout(40)
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
 
     return driver
 
