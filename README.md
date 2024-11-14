@@ -9,6 +9,7 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 
 - **Automated Testing**: Uses Selenium WebDriver to interact with target URLs.
 - **Time-Based SQL Injection Detection**: Identifies potential vulnerabilities by introducing deliberate time delays in SQL queries.
+- **Bypasses WAFs by rotating proxies and randomizing headers**
 - **Multi-Trial Validation**: Runs multiple trials to reduce false positives.
 - **Error Handling**: Ignores server-side errors (HTTP 500) to avoid false detections.
 
@@ -48,17 +49,18 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
 3. Run the scanner:
 
     ```bash
-    python scan.py -u path_to_url_file.txt -p path_to_payload_file.txt -t 5
+    python scan.py -u path_to_url_file.txt -p path_to_payload_file.txt --proxy-file path_to_proxy_file.txt -t 5
     ```
 
     - `-u` or `--url-file` : Path to the file containing URLs to scan.
     - `-p` or `--payload-file` : Path to the file containing SQL injection payloads.
     - `-t` or `--threads` : Number of concurrent threads (default is 5).
+    - `--proxy-file`: Path to the file containing proxies in the format ip:port (e.g., 119.15.89.87:5678).
 
 4. (Optional) If a cookie needs to be included in the request:
 
     ```bash
-    python scan.py -u path_to_url_file.txt -p path_to_payload_file.txt -c "session_id=abcdef123456"
+    python sqli.py -p PAYLOAD_FILE -u URL_FILE --proxy-file PROXY_FILE [-c COOKIE] [-t THREADS]
     ```
 
 ## Example
