@@ -45,15 +45,14 @@ def load_proxies(file_path):
 def setup_selenium_driver(proxy=None):
     """Setup and return a Selenium Chrome WebDriver with proxy and user-agent options."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run Chrome in headless mode
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-background-timer-throttling")
-    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-    chrome_options.add_argument("--disable-renderer-backgrounding")
-    chrome_options.add_argument("--disable-software-rasterizer")
+    chrome_options.add_argument("--disable-images")  # Disable image loading for speed
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable images
+    chrome_options.add_argument("--disable-javascript")  # Optional: Disable JavaScript if not needed
 
     # Apply proxy settings if provided
     if proxy:
@@ -69,10 +68,13 @@ def setup_selenium_driver(proxy=None):
     chrome_options.add_argument("--log-level=3")
 
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-    driver.set_page_load_timeout(60)
-    driver.set_script_timeout(60)
+    
+    # Increase timeouts for page loading and script execution
+    driver.set_page_load_timeout(180)  # 180 seconds for page load timeout
+    driver.set_script_timeout(180)  # 180 seconds for script execution timeout
 
     return driver
+
 
 def get_random_user_agent():
     """Return a random user-agent string."""
@@ -123,7 +125,11 @@ def perform_request_selenium(driver, url, payload, cookie, proxy_list):
         print(Fore.RED + f"[✗] Not Vulnerable: {target_url}")
         return target_url, False
 
-    except (TimeoutException, WebDriverException) as e:
+    except TimeoutException:
+        print(Fore.YELLOW + f"[!] Timeout occurred while scanning {target_url}. Retrying...")
+        return perform_request_selenium(driver, url, payload, cookie, proxy_list)
+
+    except WebDriverException as e:
         # Detect IP block or WAF restriction and switch to proxy
         if "ERR_CONNECTION_RESET" in str(e) or "403" in str(e) or "ERR_PROXY_CONNECTION_FAILED" in str(e):
             print(Fore.YELLOW + f"[!] Block detected for {target_url}. Retrying with a proxy...")
@@ -132,8 +138,12 @@ def perform_request_selenium(driver, url, payload, cookie, proxy_list):
                 driver.quit()
                 new_driver = setup_selenium_driver(proxy=new_proxy)
                 return perform_request_selenium(new_driver, url, payload, cookie, proxy_list)
-            else:
-                print(Fore.RED + f"[!] No proxies available to retry.")
+        elif "Timed out receiving message from renderer" in str(e):
+            print(Fore.YELLOW + f"[!] Renderer timeout for {target_url}. Retrying...")
+            driver.quit()
+            # Recreate driver and retry the request
+            new_driver = setup_selenium_driver(proxy=None)
+            return perform_request_selenium(new_driver, url, payload, cookie, proxy_list)
         else:
             print(Fore.RED + f"[!] WebDriverException: {e.msg.splitlines()[0]}")
         return target_url, False
