@@ -70,8 +70,8 @@ def setup_selenium_driver(proxy=None):
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
     
     # Increase timeouts for page loading and script execution
-    driver.set_page_load_timeout(180)  # 180 seconds for page load timeout
-    driver.set_script_timeout(180)  # 180 seconds for script execution timeout
+    driver.set_page_load_timeout(120)  # 180 seconds for page load timeout
+    driver.set_script_timeout(120)  # 180 seconds for script execution timeout
 
     return driver
 
