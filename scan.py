@@ -105,7 +105,7 @@ def perform_request_selenium(driver, url, payload, cookie, proxy_list):
         time_based_payload = f"{url}{quote(payload + ' /*!SLEEP(10)*/', safe='')}"
         consistent_delay_count = 0
 
-        for attempt in range(3):  # Three attempts to confirm vulnerability
+        for attempt in range(2):  # Three attempts to confirm vulnerability
             time.sleep(random.uniform(1, 3))
             start_time = time.time()
             driver.get(time_based_payload)
