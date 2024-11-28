@@ -40,6 +40,20 @@ This is a Python-based vulnerability scanner designed to detect Time-Based Blind
     ```bash
     pip install -r requirements.txt
     ```
+## Chrome Driver Installation
+
+```bash
+wget wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip -O chromedriver-linux64.zip
+```
+```bash
+unzip chromedriver-linux64.zip
+```
+```bash
+cd chromedriver-linux64 
+```
+```bash
+sudo mv chromedriver /usr/bin
+```
 
 ## Usage
 
