@@ -148,36 +148,62 @@ def perform_request_selenium(driver, url, payload, cookie, proxy_list):
             print(Fore.RED + f"[!] WebDriverException: {e.msg.splitlines()[0]}")
         return target_url, False
         
-def save_results(vulnerable_urls, total_found, total_scanned, start_time):
-    """Save the scan results to an HTML report in the specified output folder with the domain name in the filename."""
+def save_results(vulnerable_urls, total_found, total_scanned, start_time, output_base="output"):
+   
+    # Determine the domain for the filename
     if vulnerable_urls:
-        # Extract the domain from the first vulnerable URL for the report filename
         domain = urlparse(vulnerable_urls[0]).netloc
     else:
-        # Use 'unknown_domain' if no vulnerabilities are found
         domain = "unknown_domain"
 
-    output_dir = os.path.expanduser("~/aungrecon/output/bsqli_results")
-    filename = os.path.join(output_dir, f"{domain}_bsqli_report.html")
+    # Create the output directory
+    output_dir = os.path.expanduser(output_base)
     os.makedirs(output_dir, exist_ok=True)
 
-    html_content = generate_html_report("Blind SQL Injection", total_found, total_scanned, int(time.time() - start_time), vulnerable_urls)
-    with open(filename, 'w') as f:
-        f.write(html_content)
-    print(Fore.GREEN + f"[✓] Report saved as {filename}")
+    # Generate the filename
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = os.path.join(output_dir, f"{domain}_bsqli_report_{timestamp}.html")
+
+    # Generate the HTML content
+    html_content = generate_html_report(
+        scan_type="Blind SQL Injection",
+        total_found=total_found,
+        total_scanned=total_scanned,
+        time_taken=int(time.time() - start_time),
+        vulnerable_urls=vulnerable_urls
+    )
+
+    # Write to file
+    try:
+        with open(filename, 'w') as f:
+            f.write(html_content)
+        print(Fore.GREEN + f"[✓] Report saved as {filename}")
+    except Exception as e:
+        print(Fore.RED + f"[✗] Failed to save the report: {e}")
+
 
 def generate_html_report(scan_type, total_found, total_scanned, time_taken, vulnerable_urls):
-    """Generate a simple HTML report for vulnerabilities found."""
+    
     html_content = f"""
     <html>
-    <head><title>{scan_type} Report</title></head>
+    <head>
+        <title>{scan_type} Report</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            h1 {{ color: #2E8B57; }}
+            .summary {{ margin: 20px 0; }}
+            .vulnerable-urls {{ color: #FF4500; }}
+        </style>
+    </head>
     <body>
         <h1>{scan_type} Report</h1>
-        <p>Total Found: {total_found}</p>
-        <p>Total Scanned: {total_scanned}</p>
-        <p>Time Taken: {time_taken} seconds</p>
-        <h2>Vulnerable URLs</h2>
-        <ul>
+        <div class="summary">
+            <p><strong>Total Scanned:</strong> {total_scanned}</p>
+            <p><strong>Total Vulnerabilities Found:</strong> {total_found}</p>
+            <p><strong>Time Taken:</strong> {time_taken} seconds</p>
+        </div>
+        <h2>Vulnerable URLs:</h2>
+        <ul class="vulnerable-urls">
             {"".join(f'<li>{url}</li>' for url in vulnerable_urls)}
         </ul>
     </body>
