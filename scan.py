@@ -5,6 +5,7 @@ import sys
 import time
 import random
 import argparse
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from datetime import datetime
@@ -17,6 +18,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import TimeoutException, WebDriverException
+
+# Create a thread-local storage for WebDriver instances
+thread_local = threading.local()
 
 # Initialize colorama
 init(autoreset=True)
@@ -54,13 +58,11 @@ def setup_selenium_driver(proxy=None):
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable images
     chrome_options.add_argument("--disable-javascript")  # Optional: Disable JavaScript if not needed
 
-    # Apply proxy settings if provided
     if proxy:
         formatted_proxy = f"http://{proxy}"  # Prefix with protocol
         chrome_options.add_argument(f'--proxy-server={formatted_proxy}')
         print(Fore.CYAN + f"[i] Using Proxy: {formatted_proxy}")
 
-    # Set a random user-agent for each session
     random_user_agent = get_random_user_agent()
     chrome_options.add_argument(f"user-agent={random_user_agent}")
 
@@ -68,12 +70,15 @@ def setup_selenium_driver(proxy=None):
     chrome_options.add_argument("--log-level=3")
 
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-    
-    # Increase timeouts for page loading and script execution
-    driver.set_page_load_timeout(120)  # 180 seconds for page load timeout
-    driver.set_script_timeout(120)  # 180 seconds for script execution timeout
+
+    # Store the WebDriver instance in thread-local storage
+    thread_local.driver = driver
+
+    driver.set_page_load_timeout(120)
+    driver.set_script_timeout(120)
 
     return driver
+
 
 
 def get_random_user_agent():
@@ -211,12 +216,12 @@ def generate_html_report(scan_type, total_found, total_scanned, time_taken, vuln
     """
     return html_content
 
-# Cleanup WebDrivers
 def cleanup_drivers():
     """Close all thread-local WebDrivers."""
     if hasattr(thread_local, "driver") and thread_local.driver:
         thread_local.driver.quit()
-        thread_local.driver = None 
+        thread_local.driver = None
+
 
 def main():
     parser = argparse.ArgumentParser(description="Blind SQL Injection Scanner with Selenium and Optional Proxy Support")
