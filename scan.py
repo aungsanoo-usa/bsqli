@@ -211,6 +211,13 @@ def generate_html_report(scan_type, total_found, total_scanned, time_taken, vuln
     """
     return html_content
 
+# Cleanup WebDrivers
+def cleanup_drivers():
+    """Close all thread-local WebDrivers."""
+    if hasattr(thread_local, "driver") and thread_local.driver:
+        thread_local.driver.quit()
+        thread_local.driver = None 
+
 def main():
     parser = argparse.ArgumentParser(description="Blind SQL Injection Scanner with Selenium and Optional Proxy Support")
     parser.add_argument("-p", "--payload-file", required=True, help="Path to the file containing SQLi payloads")
