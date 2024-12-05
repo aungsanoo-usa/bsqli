@@ -283,4 +283,7 @@ def main():
     print(Fore.GREEN + "[✓] Scan Complete")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        cleanup_drivers()
